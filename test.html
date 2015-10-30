@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<head>
+ <meta charset="utf-8">
+  <title>Population Map</title>
+  <script src="http://d3js.org/d3.v3.min.js"></script>
+  <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Open+Sans:400,600">
+  
+<body>
+  <h1>US Population Map (July 2014)</h1>
+  <div id ="map"></div>
+  <div class="description"><span id="description"></span></div>
+  <div id="sequence"></div>
+  <div id ="chart"></div>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/queue-async/1.0.7/queue.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.19/topojson.min.js"></script>
+<script src="sunburst.js"></script>
+
+<script>
+var state_population = {};
+
+d3.csv("state_pop.csv", function(error, data){
+  for(var i = 0; i < data.length; i++){
+        var d = data[i];
+        // console.log(d.state);
+        if(!state_population[d.id]){
+          state_population[d.id] = {};
+          state_population[d.id].state = d.state;
+          state_population[d.id].population = 0;
+          state_population[d.id].pop_structure = {"name": "root", "children": []};
+        }
+
+        state_population[d.id].pop_structure.children.push({"name": d.sex, "children":[]});
+        state_population[d.id].population += d.wa+ d.ba + d.ia+ d.aa+ d.na+d.tom;
+
+        var gender = d.sex;
+        for(var j=0; j < state_population[d.id].pop_structure.children.length; j++){
+          var item = state_population[d.id].pop_structure.children[j];
+          if(item.name == gender){
+            item.children.push({"name": "White", "size":d.wa});
+            item.children.push({"name": "Black/African American", "size":d.ba});
+            item.children.push({"name": "Indian/Alaska Native", "size":d.ia});
+            item.children.push({"name": "Asian", "size":d.aa});
+            item.children.push({"name": "Native Hawaiian", "size":d.na});
+            item.children.push({"name": "2/More Races", "size":d.tom});
+          }
+
+        }
+  }
+
+});
+console.log(state_population);
+
+
+</script>
+
+</body>
+</html>

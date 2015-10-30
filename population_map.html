@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+ <meta charset="utf-8">
+  <title>Population Map</title>
+  <script src="http://d3js.org/d3.v3.min.js"></script>
+  <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Open+Sans:400,600">
+  <style>
+    html,body {
+      font-family: 'Open Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 400;
+      margin: 0;
+      padding: 0;
+/*      position: relative;*/
+/*      width: 960px;*/
+      text-align: center;
+    }
+
+    .land {fill: #fff;}
+    .counties {
+      fill: none;
+    }
+
+    .states {
+      fill: none;
+      stroke: #fff;
+      stroke-linejoin: round;
+    }
+    #map{margin: 10px auto;}
+
+    #sequence {width: 900px; height: 70px; margin: 0 auto;}
+
+    #window{position: absolute; top: 0; bottom: 0; left: 0; right: 0; display: none; background: rgba(0,0,0,0.8); border-radius: 10px; margin: 0;}
+    #chart{width: 900px; height: 300px; margin: auto;}
+    #close{margin: 15px auto;}
+
+    .q0-9 { fill:rgb(224,247,250); }
+    .q1-9 { fill:rgb(178,235,242); }
+    .q2-9 { fill:rgb(128,222,234); }
+    .q3-9 { fill:rgb(77,208,225); }
+    .q4-9 { fill:rgb(38,198,218); }
+    .q5-9 { fill:rgb(0,188,212); }
+    .q6-9 { fill:rgb(0,172,193); }
+    .q7-9 { fill:rgb(0,151,167); }
+    .q8-9 { fill:rgb(0,96,100); }
+
+    .description{margin: 0 auto; height: 20px;}
+
+  </style>
+
+<body>
+  <div><h1>US Population Map (July 2014)</h1></div>
+  <div class="description"><span id="description"></span></div>
+  <div id ="map"></div>
+  <div id ="window">
+    <button id="close">Close Window</button>
+    <div id="sequence"></div>
+    <div id ="chart"></div>
+  </div><!-- #window -->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/queue-async/1.0.7/queue.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.19/topojson.min.js"></script>
+<script src="sunburst.js"></script>
+<script>
+
+var width = 960,
+    height = 600;
+
+
+
+var rateById = d3.map();
+
+var quantize = d3.scale.quantize()
+    .domain([0, 1e7])
+    .range(d3.range(9).map(function(i) { return "q" + i + "-9"; }));
+
+var projection = d3.geo.albersUsa()
+    .scale(1000)
+    .translate([width / 2, height / 2]);
+
+var path = d3.geo.path()
+    .projection(projection);
+
+var svg = d3.select("#map").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+
+var state_population = {};
+var max_value =0;
+
+d3.csv("state_pop.csv", function(error, data){
+  for(var i = 0; i < data.length; i++){
+        var d = data[i];
+        // console.log(d);
+        if(!state_population[d.id]){
+          state_population[d.id] = {};
+          state_population[d.id].state = d.state;
+          state_population[d.id].population = 0;
+          state_population[d.id].pop_structure = {"name": "population", "children": []};
+        }
+
+        state_population[d.id].pop_structure.children.push({"name": d.sex, "children":[]});
+        state_population[d.id].population += parseInt(d.wa)+ parseInt(d.ba) + parseInt(d.ia)+ parseInt(d.aa)+ parseInt(d.na)+parseInt(d.tom);
+
+        var gender = d.sex;
+        for(var j=0; j < state_population[d.id].pop_structure.children.length; j++){
+          var item = state_population[d.id].pop_structure.children[j];
+          if(item.name == gender){
+            item.children.push({"name": "White", "size":parseInt(d.wa)});
+            item.children.push({"name": "Black/African American", "size":parseInt(d.ba)});
+            item.children.push({"name": "Indian/Alaska Native", "size":parseInt(d.ia)});
+            item.children.push({"name": "Asian", "size":parseInt(d.aa)});
+            item.children.push({"name": "Native Hawaiian", "size":parseInt(d.na)});
+            item.children.push({"name": "2/More Races", "size":parseInt(d.tom)});
+          }
+
+        }
+  }
+
+
+  for(var key in state_population){
+    if (state_population.hasOwnProperty(key)) {
+      max_value = Math.max(max_value, state_population[key].population); 
+      rateById.set(key, state_population[key].population); 
+    }   
+  }
+
+});
+
+queue()
+    .defer(d3.json, "https://gist.githubusercontent.com/mbostock/4090846/raw/us.json")
+    .await(ready);
+
+
+
+function ready(error, us) {
+  if (error) throw error;
+  // console.log(max_value);
+
+
+  quantize.domain([0, max_value])
+  svg.append("path", ".graticule")
+      .datum(topojson.feature(us, us.objects.land))
+      .attr("class", "land")
+      .attr("d", path);
+
+  svg.append("g")
+      .attr("class", "states")
+    .selectAll("path")
+      .data(topojson.feature(us, us.objects.states).features)
+    .enter().append("path")
+      .attr("class", function(d) { return quantize(rateById.get(d.id)); })
+      .attr("d", path)
+      .on("mouseover", mouseover)
+      .on("mouseleave", mouseleave)
+      .on("click", mouseclick);
+
+  svg.append("path")
+      .datum(topojson.mesh(us, us.objects.states, function(a, b) { return a !== b; }))
+      .attr("class", "states")
+      .attr("d", path);
+}
+
+function mouseover(d){
+  d3.select(".description").style("visibility", "");
+  d3.select(this).style("opacity", 0.8);
+  description_string = state_population[d.id].state  + ': ' + state_population[d.id].population;
+  d3.select("#description").text(description_string);
+};
+
+function mouseleave(d){
+  d3.select(this).style("opacity", 1);
+  d3.select(".description").style("visibility", "hidden");
+};
+
+function mouseclick(d){
+  $("#window").show();
+  sunburst(state_population[d.id].pop_structure);
+}
+
+$("#close").click(function(){
+  $("#window").hide();
+});
+
+d3.select(self.frameElement).style("height", height + "px");
+
+</script>
+
+</body>
+</html>
